@@ -2,7 +2,6 @@
 # Implementation of tSNE/SNE
 # Authors: Evan Shamov and Ian Zhang
 # Code: Evan Shamov
-
 # Descr: This program implements the sigma bisection described in p.4 and also
 # does the first step in the begin loop of Alg.1
 
@@ -32,11 +31,10 @@ Perplexity_row = function(p){
 # Output:
 # - SIGMA: sigma producing a conditional distribution P_i with desired ppx.
 # - P: conditional distribution P_i with desired ppx.
-SigmaBisection_row = function(i, X, ppx, tol = 1e-6, max_iter = 100, sigma0 = 1){
+SigmaBisection_row = function(j, X, ppx, tol = 1e-6, max_iter = 100, sigma0 = 1){
   Converged = FALSE
+  x = X[j, ]
   D = apply(X, MARGIN = 1, FUN = function(y){sum((x-y)^2)})
-  
-  x = X[i, ]
   
   sigma = sigma0
   sigma_min = 0
@@ -95,6 +93,7 @@ ComputeAffn_p = function(X, ppx, tol = 1e-6, max_iter = 100, sigma0 = 1){
     Bisectn_Output = SigmaBisection_row(row, X, ppx, tol, max_iter, sigma0)
     P[row, ] = Bisectn_Output$P
   }
+  diag(P)=0
   return(P)
 }
 
@@ -106,3 +105,16 @@ Symmetrize_p = function(P){
   P_symm = P_symm/sum(P_symm)
   return(P_symm)
 }
+
+ComputeAffn_q = function(Y){
+  rowNorm_sq = rowSums(Y^2)
+  D = outer(rowNorm_sq, rowNorm_sq, '+') - 2 * Y %*% t(Y)
+  D[D < 0] = 0
+  
+  E = exp(-D)
+  diag(E) = 0 # we require qii = 0, see p5.
+  Q = E / sum(E)
+  
+  return(Q)
+}
+
