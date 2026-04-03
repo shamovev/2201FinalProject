@@ -59,7 +59,7 @@ CliffTor4 = Pushforward(c(vMM$alpha, A_add),
                         c(vMM$beta, B_add), 
                         c(vMM$cluster, cluster_add))
 
-# Add White Noise (Optional)
+# Add White Noise
 noise_sd = 0.1
 CliffTor4$x1 = CliffTor4$x1 + rnorm(n_clust + n_add, mean = 0, sd = noise_sd)
 CliffTor4$x2 = CliffTor4$x2 + rnorm(n_clust + n_add, mean = 0, sd = noise_sd)
