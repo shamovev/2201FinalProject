@@ -7,10 +7,8 @@ The goal of this project is to study and compare **Stochastic Neighbour Embeddin
 - Compare these embeddings to those that can be obtained through simpler methods like PCA.
 ## Contents
 This repository contains the following 8 files.
-- `CliffordTorusData_GenerateFinal.R`
-  This script generates the CliffTor4 data.
-- `HAGData_GenerateFinal.R`
-  This script generates the HAG data.
+- `CliffordTorusData_GenerateFinal.R` This script generates the CliffTor4 data.
+- `HAGData_GenerateFinal.R` This script generates the HAG data.
 - `CliffordTorusData_Visual.R` This script produces the following visualizations of CliffTor4: a pairs plot, an interactive plot of the stereographic projection of the data, a tSNE plot using the tsne library.
 - `HagData_Visual.R` This script produces the following visualizations of HAG: a pairs plot and a tSNE plot using the tsne library.
 - `tSNE_implementation.R` This script is our implementation of the default t-SNE described by van der Maaten and Hinton (2008). 'Early exaggeration' was implemented for improved optimization, but adaptive gains were not.
