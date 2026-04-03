@@ -1,0 +1,172 @@
+# STA2201 Final Project
+# Implementation of SNE
+# Authors: Evan Shamov and Ian Zhang
+
+# !!IMPORTANT!! Before running SNE, execute the entire script. 
+# Some helper functions share names with functions in the tSNE file, but their 
+# definitions are not the same. 
+
+# !!IMPORTANT!! Equation references are with respect to the van der Maaten and
+# Hinton, 2008, paper.
+
+# Input: p, a probability distribution vector.
+# Output: H(p)
+ShannonEntropy_row = function(p){
+  p = p[p > 0]
+  # Assume that p_i = (p_{j|i})_i
+  Hp = -sum(p*log(p, base = 2))
+  return(Hp)
+}
+
+# Input: p, a probability distribution vector.
+# Output:  Perp(p)
+Perplexity_row = function(p){
+  p = p[p>0]
+  # Assume that p_i = (p_{j|i})_i
+  Perpp = 2^(ShannonEntropy_row(p))
+  return(Perpp)
+}
+
+# Input:
+# - i: row of X.
+# - X: Data matrix with rows corresponding to observations.
+# - ppx: Perplexity. Should be kept between 5 and 50.
+# Output:
+# - SIGMA: sigma producing a conditional distribution P_i with desired ppx.
+# - P: conditional distribution P_i with desired ppx.
+SigmaBisection_row = function(j, X, ppx, tol = 1e-6, max_iter = 100, sigma0 = 1){
+  Converged = FALSE
+  x = X[j, ]
+  D = apply(X, MARGIN = 1, FUN = function(y){sum((x-y)^2)})
+  
+  sigma = sigma0
+  sigma_min = 0
+  sigma_max = Inf
+  
+  for (i in 1:max_iter){
+    # Compute Conditional Prob Dstbn, P_i
+    p_num = exp(-D / (2 * sigma^2))
+    p_num[j] = 0
+    p_denom = sum(p_num)
+    p = p_num / p_denom
+    
+    # Compute Shannon Entropy of P_i
+    H = ShannonEntropy_row(p)
+    
+    # If sufficiently close, break.
+    if (abs(H - log(ppx, 2)) < tol){
+      Converged = TRUE
+      break
+    }
+    # If H is too low, increase sigma.
+    else if (H - log(ppx, 2) < 0){
+      sigma_min = sigma
+      if (is.infinite(sigma_max)){
+        sigma = 2*sigma
+      }
+      else{
+        sigma = (sigma + sigma_max) / 2
+      }
+    }
+    # If H is too high, decrease it.
+    else if (H - log(ppx, 2) > 0){
+      sigma_max = sigma
+      sigma = (sigma + sigma_min) / 2
+    }
+  }
+  
+  p_num = exp(-D / (2*sigma^2))
+  p_num[j] = 0
+  p_denom = sum(p_num)
+  p = p_num/p_denom
+  
+  Output = list(SIGMA = sigma, P = p, PPX = 2^(ShannonEntropy_row(p)),
+                iterations = i, converged = Converged)
+  return(Output)
+}
+
+# Input:
+# - X: Data matrix with rows corresponding to observations.
+# - ppx: Perplexity. Should be kept between 5 and 50.
+# Output: Matrix of pairwise affinities, [p_{j|i}]_ij.
+ComputeAffn_p = function(X, ppx, tol = 1e-6, max_iter = 100, sigma0 = 1){
+  n = dim(X)[1]
+  P = matrix(data = NA, nrow = n, ncol = n)
+  # P_ij = p_{j|i}
+  for (row in 1:n){
+    Bisectn_Output = SigmaBisection_row(row, X, ppx, tol, max_iter, sigma0)
+    P[row, ] = Bisectn_Output$P
+  }
+  diag(P)=0
+  return(P)
+}
+
+# Input: Y, Embedding data matrix.
+# Output: Matrix of low-dimensional affinities. See eq(2).
+ComputeAffn_q = function(Y){
+  rowNorm_sq = rowSums(Y^2)
+  D = outer(rowNorm_sq, rowNorm_sq, '+') - 2 * Y %*% t(Y)
+  D[D < 0] = 0
+  
+  E = exp(-D)
+  diag(E) = 0 # we require qii = 0, see p5.
+  
+  row_sums = rowSums(E)
+  Q = E / row_sums
+  
+  return(Q)
+}
+
+# Input:
+# - Y: Current points in mapping.
+# - P: Conditional Probabilities in X. See eq (1).
+# - Q: Conditional Probabilities in Y. See eq (2).
+# Output: Gradient at Y.
+ComputeGradient = function(Y, P, Q){
+  n = dim(Y)[1]
+  d = dim(Y)[2] # Can be 2 or 3.
+  grad = matrix(data = NA, nrow = n, ncol = d)
+  
+  for (i in 1:n){
+    D = Y[i,] - Y
+    W = P[i, ] - Q[i,] + P[,i] - Q[,i]
+    grad[i, ] = 2 * colSums(D * W)
+  }
+  
+  return(grad)
+}
+
+# Input:
+# - X: Data Matrix.
+# - ppx: Perplexity.
+# - dim_map: Dimension of desired mapping.
+# - iter_T: Number of iterations.
+# - eta: Learning rate.
+# - momentum. Vector of length iter_T containing momentum update schedule.
+# Output: Mapped points Y.
+SNE = function(X, ppx, dim_map, iter_T, eta, momentum, tol = 1e-6, max_iter = 1000, sigma0 = 1, seed = 1){
+  set.seed(seed)
+  P = ComputeAffn_p(X, ppx, tol = tol, max_iter = max_iter, sigma0 = sigma0)
+  n = dim(X)[1]
+  
+  Yinit = matrix(rnorm(n * dim_map, mean = 0, sd = 1e-4), nrow = n)
+  # Y0 = Yt, Y1 = Y(t-1), Y2 = Y(t-2)
+  Y0 = Yinit
+  Y1 = Yinit
+  Y2 = Yinit
+  
+  for (t in 1:iter_T){
+    Y2 = Y1
+    Y1 = Y0
+    
+    Q = ComputeAffn_q(Y1)
+    
+    Grad = ComputeGradient(Y1, P, Q)
+    
+    Y0 = Y1 - eta*Grad + momentum[t]*(Y1 - Y2)
+    Y0 = scale(Y0, center = TRUE, scale = FALSE)
+    
+    if(t %% 50 == 0) print(t)
+  }
+  return(Y0)
+}
