@@ -1,15 +1,18 @@
 # STA2201 Final Project
 # Implementation of tSNE/SNE
 # Authors: Evan Shamov and Ian Zhang
-# Code: Evan Shamov
-# Descr: This program implements the sigma bisection described in p.4 and also
-# does the first step in the begin loop of Alg.1
 
-# X = matrix(data = rnorm(100*10, mean= 0, sd = 5), nrow = 100, ncol = 10)
+# !!IMPORTANT!! Before running tSNE, execute the entire script. 
+# Some helper functions share names with functions in the SNE file, but their 
+# definitions are not the same. 
+
+# !!IMPORTANT!! Equation references are with respect to the van der Maaten and
+# Hinton, 2008, paper.
 
 # Input: p, a probability distribution vector.
 # Output: H(p)
 ShannonEntropy_row = function(p){
+  p = p[p > 0]
   # Assume that p_i = (p_{j|i})_i
   Hp = -sum(p*log(p, base = 2))
   return(Hp)
@@ -42,9 +45,10 @@ SigmaBisection_row = function(j, X, ppx, tol = 1e-6, max_iter = 100, sigma0 = 1)
   
   for (i in 1:max_iter){
     # Compute Conditional Prob Dstbn, P_i
-    p_num = exp(-D / (2*sigma^2))
+    p_num = exp(-D / (2 * sigma^2))
+    p_num[j] = 0
     p_denom = sum(p_num)
-    p = p_num/p_denom
+    p = p_num / p_denom
     
     # Compute Shannon Entropy of P_i
     H = ShannonEntropy_row(p)
@@ -72,6 +76,7 @@ SigmaBisection_row = function(j, X, ppx, tol = 1e-6, max_iter = 100, sigma0 = 1)
   }
   
   p_num = exp(-D / (2*sigma^2))
+  p_num[j] = 0
   p_denom = sum(p_num)
   p = p_num/p_denom
   
@@ -89,7 +94,6 @@ ComputeAffn_p = function(X, ppx, tol = 1e-6, max_iter = 100, sigma0 = 1){
   P = matrix(data = NA, nrow = n, ncol = n)
   # P_ij = p_{j|i}
   for (row in 1:n){
-    x = X[row, ]
     Bisectn_Output = SigmaBisection_row(row, X, ppx, tol, max_iter, sigma0)
     P[row, ] = Bisectn_Output$P
   }
@@ -106,15 +110,75 @@ Symmetrize_p = function(P){
   return(P_symm)
 }
 
+# Input: Y, Embedding data matrix.
+# Output: Matrix of low-dimensional affinities. See eq(9).
 ComputeAffn_q = function(Y){
   rowNorm_sq = rowSums(Y^2)
   D = outer(rowNorm_sq, rowNorm_sq, '+') - 2 * Y %*% t(Y)
   D[D < 0] = 0
   
-  E = exp(-D)
+  E = 1/(1+D) # Use t1
   diag(E) = 0 # we require qii = 0, see p5.
   Q = E / sum(E)
   
   return(Q)
 }
 
+# Input:
+# - Y: Current points in mapping.
+# - P: Symmetrized probabilities [pij]
+# - Q: Affinities in Y. See eq (9).
+# Output: Gradient at Y.
+ComputeGradient = function(Y, P, Q){
+  n = dim(Y)[1]
+  d = dim(Y)[2] # Can be 2 or 3.
+  grad = matrix(data = NA, nrow = n, ncol = d)
+  
+  for (i in 1:n){
+    D = Y[i,] - Y
+    D2 = rowSums(D^2)
+    W = (P[i, ] - Q[i, ])/(1 + D2)
+    grad[i, ] = 4* colSums(D * W)
+  }
+  
+  return(grad)
+}
+
+# Input:
+# - X: Data Matrix.
+# - ppx: Perplexity.
+# - dim_map: Dimension of desired mapping.
+# - iter_T: Number of iterations.
+# - eta: Learning rate.
+# - momentum. Vector of length iter_T containing momentum update schedule.
+# Output: Mapped points Y.
+tSNE = function(X, ppx, dim_map, iter_T, eta, momentum, tol = 1e-6, max_iter = 1000, sigma0 = 1, seed = 1){
+  set.seed(seed)
+  P = ComputeAffn_p(X, ppx, tol = tol, max_iter = max_iter, sigma0 = sigma0)
+  P = Symmetrize_p(P)
+  n = dim(X)[1]
+  Yinit = matrix(rnorm(n * dim_map, mean = 0, sd = 1e-2), nrow = n)
+  # Y0 = Yt, Y1 = Y(t-1), Y2 = Y(t-2)
+  Y0 = Yinit
+  Y1 = Yinit
+  Y2 = Yinit
+  
+  for (t in 1:iter_T){
+    Y2 = Y1
+    Y1 = Y0
+    
+    Q = ComputeAffn_q(Y1)
+    
+    if(t < 251){
+      Grad = ComputeGradient(Y1, 5*P, Q)
+    }
+    else{
+      Grad = ComputeGradient(Y1, P, Q)
+    }
+    
+    Y0 = Y1 - eta*Grad + momentum[t]*(Y1 - Y2)
+    Y0 = scale(Y0, center = TRUE, scale = FALSE)
+    if(t %% 50 == 0) print(t)
+  }
+  return(Y0)
+}
