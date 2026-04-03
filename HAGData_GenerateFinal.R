@@ -2,6 +2,7 @@
 # Generating Hybrid Arc + Gaussian Dataset
 # Authors: Evan Shamov and Ian Zhang
 # Code: Evan Shamov
+# Output: HAG1.csv
 
 set.seed(20937635)
 
