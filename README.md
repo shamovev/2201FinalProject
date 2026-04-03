@@ -1,4 +1,4 @@
-# Final Project: SNE and t-SNE in R
+# STA2201 Final Project: SNE and t-SNE in R
 ## Purpose
 The goal of this project is to study and compare **Stochastic Neighbour Embedding (SNE)** to **t-distributed Stochastic Neighbor Embedding (t-SNE)**. We focused on:
 - implementing basic variants of the methods in `R`,
