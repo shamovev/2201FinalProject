@@ -1,5 +1,5 @@
 # STA2201 Final Project
-# Implementation of tSNE/SNE
+# Implementation of tSNE
 # Authors: Evan Shamov and Ian Zhang
 
 # !!IMPORTANT!! Before running tSNE, execute the entire script. 
